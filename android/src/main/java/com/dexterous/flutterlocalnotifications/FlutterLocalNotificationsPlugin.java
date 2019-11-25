@@ -10,6 +10,11 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
@@ -19,7 +24,6 @@ import android.text.Spanned;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.AlarmManagerCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.Person;
 import androidx.core.graphics.drawable.IconCompat;
@@ -60,6 +64,10 @@ import io.flutter.plugin.common.PluginRegistry.Registrar;
  * FlutterLocalNotificationsPlugin
  */
 public class FlutterLocalNotificationsPlugin implements MethodCallHandler, PluginRegistry.NewIntentListener {
+    /*public static final String ON_NOTIFICATION_ACTION = "onNotification";
+    public static final String ON_NOTIFICATION_ARGS = "onNotificationArgs";
+    public static final String CALLBACK_DISPATCHER = "callbackDispatcher";
+    public static final String ON_NOTIFICATION_CALLBACK_DISPATCHER = "onNotificationCallbackDispatcher";*/
     public static final String SHARED_PREFERENCES_KEY = "notification_plugin_cache";
     private static final String DRAWABLE = "drawable";
     private static final String DEFAULT_ICON = "defaultIcon";
@@ -67,6 +75,7 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
     private static final String SCHEDULED_NOTIFICATIONS = "scheduled_notifications";
     private static final String INITIALIZE_METHOD = "initialize";
     private static final String PENDING_NOTIFICATION_REQUESTS_METHOD = "pendingNotificationRequests";
+    private static final String INITIALIZE_HEADLESS_SERVICE_METHOD = "initializeHeadlessService";
     private static final String SHOW_METHOD = "show";
     private static final String CANCEL_METHOD = "cancel";
     private static final String CANCEL_ALL_METHOD = "cancelAll";
@@ -234,15 +243,15 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         String notificationDetailsJson = gson.toJson(notificationDetails);
         Intent notificationIntent = new Intent(context, ScheduledNotificationReceiver.class);
         notificationIntent.putExtra(NOTIFICATION_DETAILS, notificationDetailsJson);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, notificationDetails.id, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, notificationDetails.id, notificationIntent, PendingIntent.FLAG_CANCEL_CURRENT);
 
         AlarmManager alarmManager = getAlarmManager(context);
-        if (BooleanUtils.getValue(notificationDetails.allowWhileIdle)) {
-            AlarmManagerCompat.setExactAndAllowWhileIdle(alarmManager, AlarmManager.RTC_WAKEUP, notificationDetails.millisecondsSinceEpoch, pendingIntent);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, notificationDetails.millisecondsSinceEpoch, pendingIntent);
         } else {
-            AlarmManagerCompat.setExact(alarmManager, AlarmManager.RTC_WAKEUP, notificationDetails.millisecondsSinceEpoch, pendingIntent);
-        }
+            alarmManager.set(AlarmManager.RTC_WAKEUP, notificationDetails.millisecondsSinceEpoch, pendingIntent);
 
+        }
         if (updateScheduledNotificationsCache) {
             saveScheduledNotification(context, notificationDetails);
         }
@@ -254,7 +263,7 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         Intent notificationIntent = new Intent(context, ScheduledNotificationReceiver.class);
         notificationIntent.putExtra(NOTIFICATION_DETAILS, notificationDetailsJson);
         notificationIntent.putExtra(REPEAT, true);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, notificationDetails.id, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, notificationDetails.id, notificationIntent, PendingIntent.FLAG_CANCEL_CURRENT);
 
         AlarmManager alarmManager = getAlarmManager(context);
         long repeatInterval = 0;
@@ -330,14 +339,18 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         return bitmap;
     }
 
-    private static IconCompat getIconFromSource(Context context, String iconPath, IconSource iconSource) {
+    private static IconCompat getIconFromSource(Context context, String iconPath, String defaultIconPath, IconSource iconSource) {
         IconCompat icon = null;
         switch (iconSource) {
             case Drawable:
                 icon = IconCompat.createWithResource(context, getDrawableResourceId(context, iconPath));
                 break;
             case FilePath:
-                icon = IconCompat.createWithBitmap(BitmapFactory.decodeFile(iconPath));
+                Bitmap bitmap = BitmapFactory.decodeFile(iconPath);
+                if (bitmap == null) {
+                    bitmap = BitmapFactory.decodeFile(defaultIconPath);
+                }
+                icon = IconCompat.createWithBitmap(getCroppedBitmap(bitmap));
                 break;
             case ContentUri:
                 icon = IconCompat.createWithContentUri(iconPath);
@@ -348,6 +361,27 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         return icon;
     }
 
+    private static Bitmap getCroppedBitmap(Bitmap bitmap) {
+        Bitmap output = Bitmap.createBitmap(bitmap.getWidth(),
+            bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+
+        final int color = 0xff424242;
+        final Paint paint = new Paint();
+        final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
+
+        paint.setAntiAlias(true);
+        canvas.drawARGB(0, 0, 0, 0);
+        paint.setColor(color);
+        // canvas.drawRoundRect(rectF, roundPx, roundPx, paint);
+        canvas.drawCircle(bitmap.getWidth() / 2, bitmap.getHeight() / 2,
+            bitmap.getWidth() / 2, paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(bitmap, rect, rect, paint);
+        //Bitmap _bmp = Bitmap.createScaledBitmap(output, 60, 60, false);
+        //return _bmp;
+        return output;
+    }
 
     private static void applyGrouping(NotificationDetails notificationDetails, NotificationCompat.Builder builder) {
         Boolean isGrouped = false;
@@ -505,7 +539,7 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         Person.Builder personBuilder = new Person.Builder();
         personBuilder.setBot(BooleanUtils.getValue(personDetails.bot));
         if (personDetails.icon != null && personDetails.iconBitmapSource != null) {
-            personBuilder.setIcon(getIconFromSource(context, personDetails.icon, personDetails.iconBitmapSource));
+            personBuilder.setIcon(getIconFromSource(context, personDetails.icon, personDetails.defaultIcon, personDetails.iconBitmapSource));
         }
         personBuilder.setImportant(BooleanUtils.getValue(personDetails.important));
         if (personDetails.key != null) {
@@ -598,7 +632,51 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         Notification notification = createNotification(context, notificationDetails);
         NotificationManagerCompat notificationManagerCompat = getNotificationManager(context);
         notificationManagerCompat.notify(notificationDetails.id, notification);
+        /*SharedPreferences sharedPreferences = context.getSharedPreferences(SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE);
+        if(sharedPreferences.contains(ON_NOTIFICATION_CALLBACK_DISPATCHER)) {
+            long callbackHandle = sharedPreferences.getLong(ON_NOTIFICATION_CALLBACK_DISPATCHER, 0);
+            HashMap<String, Object> callbackArgs = new HashMap<>();
+            callbackArgs.put(CALLBACK_DISPATCHER, callbackHandle);
+            callbackArgs.put(NotificationDetails.ID, notificationDetails.id);
+            callbackArgs.put(NotificationDetails.TITLE, notificationDetails.title);
+            callbackArgs.put(NotificationDetails.BODY, notificationDetails.body);
+            callbackArgs.put(PAYLOAD, notificationDetails.payload);
+            Intent intent = new Intent(context, NotificationService.class);
+            intent.setAction(ON_NOTIFICATION_ACTION);
+            intent.putExtra(ON_NOTIFICATION_ARGS, callbackArgs);
+            NotificationService.enqueueWork(context, intent);
+        }*/
     }
+
+    /*private void initializeHeadlessService(MethodCall call, Result result) {
+        Map<String, Object> arguments = call.arguments();
+        SharedPreferences sharedPreferences = registrar.context().getSharedPreferences(SHARED_PREFERENCES_KEY, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+
+        if(arguments.containsKey(CALLBACK_DISPATCHER)) {
+            Object callbackDispatcher = arguments.get(CALLBACK_DISPATCHER);
+            if (callbackDispatcher instanceof Long) {
+                editor.putLong(CALLBACK_DISPATCHER, (Long) callbackDispatcher);
+            } else if (callbackDispatcher instanceof Integer) {
+                editor.putLong(CALLBACK_DISPATCHER, (Integer) callbackDispatcher);
+            }
+        } else if(sharedPreferences.contains(CALLBACK_DISPATCHER)){
+            editor.remove(CALLBACK_DISPATCHER);
+        }
+
+        if(arguments.containsKey(ON_NOTIFICATION_CALLBACK_DISPATCHER)) {
+            Object onNotificationCallbackDispatcher = arguments.get(ON_NOTIFICATION_CALLBACK_DISPATCHER);
+            if(onNotificationCallbackDispatcher instanceof Long) {
+                editor.putLong(ON_NOTIFICATION_CALLBACK_DISPATCHER, (Long)onNotificationCallbackDispatcher);
+            } else if(onNotificationCallbackDispatcher instanceof Integer) {
+                editor.putLong(ON_NOTIFICATION_CALLBACK_DISPATCHER, (Integer)onNotificationCallbackDispatcher);
+            }
+        } else if(sharedPreferences.contains(ON_NOTIFICATION_CALLBACK_DISPATCHER)){
+            editor.remove(ON_NOTIFICATION_CALLBACK_DISPATCHER);
+        }
+
+        editor.commit();
+    }*/
 
     private static NotificationManagerCompat getNotificationManager(Context context) {
         return NotificationManagerCompat.from(context);
@@ -608,6 +686,7 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
     public void onMethodCall(MethodCall call, Result result) {
         switch (call.method) {
             case INITIALIZE_METHOD: {
+                // initializeHeadlessService(call, result);
                 initialize(call, result);
                 break;
             }
@@ -783,7 +862,7 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
     private void cancelNotification(Integer id) {
         Context context = registrar.context();
         Intent intent = new Intent(context, ScheduledNotificationReceiver.class);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, id, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, id, intent, PendingIntent.FLAG_CANCEL_CURRENT);
         AlarmManager alarmManager = getAlarmManager(context);
         alarmManager.cancel(pendingIntent);
         NotificationManagerCompat notificationManager = getNotificationManager(context);
@@ -804,7 +883,7 @@ public class FlutterLocalNotificationsPlugin implements MethodCallHandler, Plugi
         Intent intent = new Intent(context, ScheduledNotificationReceiver.class);
         for (NotificationDetails scheduledNotification :
                 scheduledNotifications) {
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, scheduledNotification.id, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, scheduledNotification.id, intent, PendingIntent.FLAG_CANCEL_CURRENT);
             AlarmManager alarmManager = getAlarmManager(context);
             alarmManager.cancel(pendingIntent);
         }

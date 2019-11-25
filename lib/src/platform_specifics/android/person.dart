@@ -8,6 +8,9 @@ class Person {
   /// Icon for this person
   final String icon;
 
+  /// Default icon for this person
+  final String defaultIcon;
+
   /// Determines how the icon should be interpreted/resolved e.g. as a drawable
   final IconSource iconSource;
 
@@ -26,6 +29,7 @@ class Person {
   Person(
       {this.bot,
       this.icon,
+      this.defaultIcon,
       this.iconSource,
       this.important,
       this.key,
@@ -36,6 +40,7 @@ class Person {
     return <String, dynamic>{
       'bot': bot,
       'icon': icon,
+      'defaultIcon': defaultIcon,
       'iconSource': iconSource?.index,
       'important': important,
       'key': key,

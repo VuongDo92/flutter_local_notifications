@@ -1,7 +1,5 @@
 import 'dart:typed_data';
 import 'dart:ui';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
 import 'enums.dart';
 import 'styles/style_information.dart';
 import 'styles/default_style_information.dart';

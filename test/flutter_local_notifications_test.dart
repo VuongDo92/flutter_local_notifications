@@ -113,9 +113,6 @@ void main() {
 
       NotificationDetails platformChannelSpecifics =
           NotificationDetails(androidPlatformChannelSpecifics, null);
-      var androidPlatformChannelSpecificsMap =
-          androidPlatformChannelSpecifics.toMap();
-      androidPlatformChannelSpecificsMap['allowWhileIdle'] = false;
       await flutterLocalNotificationsPlugin.schedule(id, title, body,
           scheduledNotificationDateTime, platformChannelSpecifics);
       verify(mockChannel.invokeMethod('schedule', <String, dynamic>{
@@ -124,7 +121,7 @@ void main() {
         'body': body,
         'millisecondsSinceEpoch':
             scheduledNotificationDateTime.millisecondsSinceEpoch,
-        'platformSpecifics': androidPlatformChannelSpecificsMap,
+        'platformSpecifics': androidPlatformChannelSpecifics.toMap(),
         'payload': ''
       }));
     });

@@ -20,13 +20,13 @@ enum RepeatInterval { EveryMinute, Hourly, Daily, Weekly }
 
 /// The days of the week
 class Day {
-  static const Sunday = Day(1);
-  static const Monday = Day(2);
-  static const Tuesday = Day(3);
-  static const Wednesday = Day(4);
-  static const Thursday = Day(5);
-  static const Friday = Day(6);
-  static const Saturday = Day(7);
+  static const Sunday = const Day(1);
+  static const Monday = const Day(2);
+  static const Tuesday = const Day(3);
+  static const Wednesday = const Day(4);
+  static const Thursday = const Day(5);
+  static const Friday = const Day(6);
+  static const Saturday = const Day(7);
 
   static get values =>
       [Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday];
@@ -83,7 +83,7 @@ class FlutterLocalNotificationsPlugin {
 
   DidReceiveLocalNotificationCallback didReceiveLocalNotificationCallback;
 
-  /// Initializes the plugin. Call this method on application before using the plugin further. This should only be done once. When a notification created by this plugin was used to launch the app, calling `initialize` is what will trigger to the `onSelectNotification` callback to be fire.
+  /// Initializes the plugin. Call this method on application before using the plugin further
   Future<bool> initialize(InitializationSettings initializationSettings,
       {SelectNotificationCallback onSelectNotification}) async {
     selectNotificationCallback = onSelectNotification;
@@ -138,17 +138,12 @@ class FlutterLocalNotificationsPlugin {
   }
 
   /// Schedules a notification to be shown at the specified time with an optional payload that is passed through when a notification is tapped
-  /// The [androidAllowWhileIdle] parameter is Android-specific and determines if the notification should still be shown at the specified time
-  /// even when in a low-power idle mode.
   Future<void> schedule(int id, String title, String body,
       DateTime scheduledDate, NotificationDetails notificationDetails,
-      {String payload, bool androidAllowWhileIdle = false}) async {
+      {String payload}) async {
     _validateId(id);
     var serializedPlatformSpecifics =
         _retrievePlatformSpecificNotificationDetails(notificationDetails);
-    if (_platform.isAndroid) {
-      serializedPlatformSpecifics['allowWhileIdle'] = androidAllowWhileIdle;
-    }
     await _channel.invokeMethod('schedule', <String, dynamic>{
       'id': id,
       'title': title,
